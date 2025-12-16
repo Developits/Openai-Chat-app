@@ -1,50 +1,150 @@
-# Welcome to your Expo app 👋
+# OpenAI Chat App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A React Native mobile application powered by OpenAI's API that allows users to chat with AI models and upload images for analysis. Built with Expo for cross-platform compatibility.
 
-## Get started
+## Features
 
-1. Install dependencies
+- **AI Chat Interface**: Real-time conversations with OpenAI models
+- **Image Upload**: Upload images for analysis and get responses
+- **Background Processing**: Messages and images are processed in the background without UI blocking
+- **Token Usage Tracking**: Displays total tokens used per request
+- **Model Selection**: Choose from different OpenAI models
+- **Conversation History**: Maintains chat history across sessions
+- **Responsive Design**: Works on both iOS and Android devices
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js (v18 or higher)
+- npm or yarn
+- Expo CLI (`npm install -g expo-cli`)
+- OpenAI API Key (sign up at https://platform.openai.com/)
+
+### Installation
+
+1. Clone the repository
+
+   ```bash
+   git clone <repository-url>
+   cd openai-chat-app
+   ```
+
+2. Install dependencies
 
    ```bash
    npm install
    ```
 
-2. Start the app
+3. Configure OpenAI API Key
+
+   - Create a `.env` file in the root directory
+   - Add your OpenAI API key:
+     ```
+     OPENAI_API_KEY=your-api-key-here
+     ```
+
+4. Start the development server
 
    ```bash
    npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+5. Run on your device
+   - Scan the QR code with the Expo Go app (iOS/Android)
+   - Or run on an emulator/simulator
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## Project Structure
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```
+openai-chat-app/
+├── app/
+│   ├── chat.tsx          # Main chat interface component
+│   ├── _layout.tsx       # Root layout component
+│   └── index.tsx         # App entry point
+├── context/
+│   └── ChatContext.tsx   # Chat state management
+├── assets/               # Images and static assets
+├── .env                  # Environment variables (not tracked)
+├── .gitignore            # Git ignore rules
+├── app.json              # Expo configuration
+├── package.json          # Dependencies and scripts
+└── README.md             # This file
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Key Components
 
-## Learn more
+### Chat Interface (`app/chat.tsx`)
 
-To learn more about developing your project with Expo, look at the following resources:
+- Handles user input and message sending
+- Manages image uploads and processing
+- Displays chat history and AI responses with token counts
+- Implements background processing for non-blocking UI
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### Chat Context (`context/ChatContext.tsx`)
 
-## Join the community
+- Manages global chat state across components
+- Handles message storage and retrieval
+- Manages model selection
 
-Join our community of developers creating universal apps.
+## Usage
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+1. **Sending Text Messages**:
+
+   - Type your question in the input field
+   - Press send button or enter key
+
+2. **Uploading Images**:
+
+   - Tap the image upload button
+   - Select one or more images
+   - Send the images along with optional text
+
+3. **Viewing Responses**:
+   - Responses appear with the format: "QuestionNumber - Answer [TokenCount]"
+   - Multiple images/questions are processed sequentially
+
+## Development
+
+### Available Scripts
+
+- `npm start` - Start development server
+- `npm run lint` - Run linting checks
+- `npm run build` - Build for production
+- `npx expo run:android` - Run on Android device/emulator
+- `npx expo run:ios` - Run on iOS device/simulator
+
+### Testing
+
+```bash
+npm test
+```
+
+### Building for Production
+
+```bash
+# Android APK using EAS
+eas build --platform android
+
+# iOS IPA using EAS
+eas build --platform ios
+
+# Web build
+npx expo export --platform web
+```
+
+## Notes
+
+- The app uses background processing to avoid UI blocking during API calls
+- Token count is displayed for each request to help track usage
+- Image processing may take additional time depending on image size
+
+## License
+
+MIT
+
+## Acknowledgments
+
+- [OpenAI](https://openai.com/) for the API
+- [Expo](https://expo.dev/) for the development framework
+- [React Native](https://reactnative.dev/) for the cross-platform capabilities
