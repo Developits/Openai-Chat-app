@@ -106,7 +106,7 @@ export default function ChatScreen() {
     selectedImages.forEach((imageUrl) => {
       contentParts.push({
         type: "image_url",
-        image_url: { url: imageUrl, detail: "high" },
+        image_url: { url: imageUrl, detail: "low" },
       });
     });
 
@@ -293,7 +293,7 @@ export default function ChatScreen() {
                   onPress={sendMessage}
                   disabled={!input.trim() && selectedImages.length === 0}
                 >
-                  <Text style={styles.sendIcon}>↑</Text>
+                  <Text style={styles.sendIcon}>➤</Text>
                 </TouchableOpacity>
               </View>
             </View>
