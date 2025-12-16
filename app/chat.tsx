@@ -1,14 +1,15 @@
+import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { Redirect } from "expo-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
+  SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
@@ -29,7 +30,6 @@ export default function ChatScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
-  const [answers, setAnswers] = useState<string[]>([]);
 
   const { apiKey } = useAuth();
   const {
@@ -40,6 +40,21 @@ export default function ChatScreen() {
     addMessage,
   } = useChat();
 
+  // Derive answers from currentConversation.messages instead of maintaining separate state
+  const derivedAnswers = useMemo(() => {
+    if (!currentConversation) return [];
+
+    const assistantMessages = currentConversation.messages.filter(
+      (msg) => msg.role === "assistant" && typeof msg.content === "string"
+    );
+
+    return assistantMessages
+      .flatMap((msg) =>
+        (msg.content as string).split("\n").filter((line) => line.trim() !== "")
+      )
+      .reverse(); // Newest first
+  }, [currentConversation]);
+
   // Create initial conversation
   useEffect(() => {
     if (apiKey && !currentConversation) {
@@ -47,12 +62,7 @@ export default function ChatScreen() {
     }
   }, [apiKey, currentConversation, createConversation]);
 
-  // ✅ Redirect if no API key - declarative approach
-  if (!apiKey) {
-    return <Redirect href="/" />;
-  }
-
-  const pickImage = async () => {
+  const pickImage = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
       Alert.alert(
@@ -63,7 +73,7 @@ export default function ChatScreen() {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"], // Fix deprecated ImagePicker.MediaTypeOptions.Images
       allowsMultipleSelection: true,
       quality: 1,
       base64: true,
@@ -73,17 +83,19 @@ export default function ChatScreen() {
       const newImages = result.assets.map(
         (asset) => `data:image/jpeg;base64,${asset.base64}`
       );
-      setSelectedImages([...selectedImages, ...newImages]);
+      setSelectedImages((prev) => [...prev, ...newImages]);
     }
-  };
+  }, []);
 
-  const removeImage = (index: number) => {
-    const updatedImages = [...selectedImages];
-    updatedImages.splice(index, 1);
-    setSelectedImages(updatedImages);
-  };
+  const removeImage = useCallback((index: number) => {
+    setSelectedImages((prev) => {
+      const updated = [...prev];
+      updated.splice(index, 1);
+      return updated;
+    });
+  }, []);
 
-  const sendMessage = async () => {
+  const sendMessage = useCallback(async () => {
     if ((!input.trim() && selectedImages.length === 0) || !apiKey) return;
 
     // Prepare message content with text and images
@@ -152,19 +164,7 @@ export default function ChatScreen() {
         };
 
         addMessage(assistantMessage);
-
-        // Add answer to the answers state
-        if (typeof assistantMessage.content === "string") {
-          const newAnswers = assistantMessage.content
-            .split("\n")
-            .filter((line) => line.trim() !== "");
-
-          // Prepend new answers to maintain stack order
-          setAnswers((prev) => [...newAnswers, ...prev]);
-        }
       } catch (error: any) {
-        console.error("API Error:", error);
-
         let errorMessage = "Something went wrong. Please try again.";
 
         if (
@@ -198,164 +198,195 @@ export default function ChatScreen() {
         setIsLoading(false);
       }
     })();
-  };
+  }, [
+    input,
+    selectedImages,
+    apiKey,
+    addMessage,
+    setInput,
+    setSelectedImages,
+    setIsLoading,
+    selectedModel,
+  ]);
 
+  // ✅ Redirect if no API key - declarative approach
   if (!apiKey) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#10a37f" />
-      </View>
-    );
+    return <Redirect href="/" />;
   }
 
+  // The duplicate !apiKey check has been removed (already handled above)
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 0}
-    >
-      {/* Header - Model Selection */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.modelSelector}
-          onPress={() => setShowModelPicker(true)}
-        >
-          <Text style={styles.modelText}>
-            {MODELS.find((m) => m.id === selectedModel)?.name || selectedModel}
-          </Text>
-          <Text style={styles.dropdownIcon}>▼</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Main Split Panel Layout */}
-      <View style={styles.mainContent}>
-        {/* Left Panel - Input Area */}
-        <View style={styles.leftPanel}>
-          {/* File Upload Section */}
-          {selectedImages.length > 0 && (
-            <View style={styles.imagePreviewContainer}>
-              {selectedImages.map((image, index) => (
-                <View key={index} style={styles.imagePreviewWrapper}>
-                  <Image source={{ uri: image }} style={styles.imagePreview} />
-                  <TouchableOpacity
-                    style={styles.removeImageButton}
-                    onPress={() => removeImage(index)}
-                  >
-                    <Text style={styles.removeImageIcon}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Text Input */}
-          <View style={styles.inputWrapper}>
-            <View style={styles.inputContainer}>
-              <TouchableOpacity
-                style={styles.imageUploadButton}
-                onPress={pickImage}
-              >
-                <Text style={styles.imageUploadIcon}>📷</Text>
-              </TouchableOpacity>
-              <TextInput
-                style={styles.input}
-                placeholder="Write your question or upload images..."
-                placeholderTextColor="#666"
-                value={input}
-                onChangeText={setInput}
-                multiline
-                maxLength={4000}
-                editable={true}
-              />
-              <TouchableOpacity
-                style={[
-                  styles.sendButton,
-                  !input.trim() &&
-                    selectedImages.length === 0 &&
-                    styles.sendButtonDisabled,
-                ]}
-                onPress={sendMessage}
-                disabled={!input.trim() && selectedImages.length === 0}
-              >
-                <Text style={styles.sendIcon}>↑</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 0}
+      >
+        {/* Header - Model Selection */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.modelSelector}
+            onPress={() => setShowModelPicker(true)}
+          >
+            <Text style={styles.modelText}>
+              {MODELS.find((m) => m.id === selectedModel)?.name ||
+                selectedModel}
+            </Text>
+            <Text style={styles.dropdownIcon}>▼</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Right Panel - Answer Stack */}
-        <View style={styles.rightPanel}>
-          <View style={styles.rightPanelHeader}>
-            <Text style={styles.rightPanelTitle}>Answers</Text>
-          </View>
-          <FlatList
-            data={answers}
-            keyExtractor={(item, index) => index.toString()}
-            renderItem={({ item }) => (
-              <View style={styles.answerCard}>
-                <Text style={styles.answerText}>{item}</Text>
+        {/* Main Split Panel Layout */}
+        <View style={styles.mainContent}>
+          {/* Left Panel - Input Area */}
+          <View style={styles.leftPanel}>
+            {/* File Upload Section */}
+            {selectedImages.length > 0 && (
+              <View style={styles.imagePreviewContainer}>
+                {selectedImages.map((image, index) => (
+                  <View key={index} style={styles.imagePreviewWrapper}>
+                    <Image
+                      source={{ uri: image }}
+                      style={styles.imagePreview}
+                      contentFit="cover"
+                      transition={200}
+                      cachePolicy="memory-disk"
+                    />
+                    <TouchableOpacity
+                      style={styles.removeImageButton}
+                      onPress={() => removeImage(index)}
+                    >
+                      <Text style={styles.removeImageIcon}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
               </View>
             )}
-            contentContainerStyle={styles.answerList}
-            showsVerticalScrollIndicator={false}
-            inverted={false}
-          />
-        </View>
-      </View>
 
-      {/* Typing Indicator */}
-      {isLoading && (
-        <View style={styles.typingIndicator}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>AI</Text>
+            {/* Text Input */}
+            <View style={styles.inputWrapper}>
+              <View style={styles.inputContainer}>
+                <TouchableOpacity
+                  style={styles.imageUploadButton}
+                  onPress={pickImage}
+                >
+                  <Text style={styles.imageUploadIcon}>📷</Text>
+                </TouchableOpacity>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Write your question or upload images..."
+                  placeholderTextColor="#666"
+                  value={input}
+                  onChangeText={setInput}
+                  multiline
+                  maxLength={4000}
+                  editable={true}
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.sendButton,
+                    !input.trim() &&
+                      selectedImages.length === 0 &&
+                      styles.sendButtonDisabled,
+                  ]}
+                  onPress={sendMessage}
+                  disabled={!input.trim() && selectedImages.length === 0}
+                >
+                  <Text style={styles.sendIcon}>↑</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
-          <View style={styles.typingDots}>
-            <ActivityIndicator size="small" color="#888" />
-            <Text style={styles.typingText}>Processing...</Text>
-          </View>
-        </View>
-      )}
 
-      {/* Model Picker Modal */}
-      <Modal visible={showModelPicker} transparent animationType="fade">
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowModelPicker(false)}
-        >
-          <View style={styles.modelPickerContainer}>
-            <Text style={styles.modelPickerTitle}>Select Model</Text>
-            {MODELS.map((model) => (
-              <TouchableOpacity
-                key={model.id}
-                style={[
-                  styles.modelOption,
-                  selectedModel === model.id && styles.modelOptionSelected,
-                ]}
-                onPress={() => {
-                  setSelectedModel(model.id);
-                  setShowModelPicker(false);
-                }}
-              >
-                <View style={styles.modelOptionInfo}>
-                  <Text style={styles.modelOptionText}>{model.name}</Text>
-                  <Text style={styles.modelOptionDescription}>
-                    {model.description}
-                  </Text>
+          {/* Right Panel - Answer Stack */}
+          <View style={styles.rightPanel}>
+            <View style={styles.rightPanelHeader}>
+              <Text style={styles.rightPanelTitle}>Answers</Text>
+            </View>
+            <FlatList
+              data={derivedAnswers}
+              keyExtractor={(item, index) => index.toString()}
+              renderItem={({ item }) => (
+                <View style={styles.answerCard}>
+                  <Text style={styles.answerText}>{item}</Text>
                 </View>
-                {selectedModel === model.id && (
-                  <Text style={styles.checkmark}>✓</Text>
-                )}
-              </TouchableOpacity>
-            ))}
+              )}
+              contentContainerStyle={styles.answerList}
+              showsVerticalScrollIndicator={false}
+              inverted={false}
+              // FlatList performance optimizations
+              initialNumToRender={10}
+              maxToRenderPerBatch={5}
+              windowSize={10}
+              removeClippedSubviews={true}
+              getItemLayout={(data, index) => ({
+                length: 80, // Approximate height of each answer card
+                offset: 80 * index,
+                index,
+              })}
+            />
           </View>
-        </TouchableOpacity>
-      </Modal>
-    </KeyboardAvoidingView>
+        </View>
+
+        {/* Typing Indicator */}
+        {isLoading && (
+          <View style={styles.typingIndicator}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>AI</Text>
+            </View>
+            <View style={styles.typingDots}>
+              <ActivityIndicator size="small" color="#888" />
+              <Text style={styles.typingText}>Processing...</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Model Picker Modal */}
+        <Modal visible={showModelPicker} transparent animationType="fade">
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowModelPicker(false)}
+          >
+            <View style={styles.modelPickerContainer}>
+              <Text style={styles.modelPickerTitle}>Select Model</Text>
+              {MODELS.map((model) => (
+                <TouchableOpacity
+                  key={model.id}
+                  style={[
+                    styles.modelOption,
+                    selectedModel === model.id && styles.modelOptionSelected,
+                  ]}
+                  onPress={() => {
+                    setSelectedModel(model.id);
+                    setShowModelPicker(false);
+                  }}
+                >
+                  <View style={styles.modelOptionInfo}>
+                    <Text style={styles.modelOptionText}>{model.name}</Text>
+                    <Text style={styles.modelOptionDescription}>
+                      {model.description}
+                    </Text>
+                  </View>
+                  {selectedModel === model.id && (
+                    <Text style={styles.checkmark}>✓</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#212121",
+  },
   container: {
     flex: 1,
     backgroundColor: "#212121",
@@ -432,9 +463,9 @@ const styles = StyleSheet.create({
     top: 4,
     right: 4,
     backgroundColor: "rgba(0,0,0,0.6)",
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -457,8 +488,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   imageUploadButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 4,
@@ -476,9 +507,9 @@ const styles = StyleSheet.create({
   },
   sendButton: {
     backgroundColor: "#10a37f",
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
     marginLeft: 4,
